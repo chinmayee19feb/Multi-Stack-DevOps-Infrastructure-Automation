@@ -1,0 +1,14 @@
+# monitoring.yml
+
+- name: Install CloudWatch Agent on all servers           # Name of this playbook (like a title)
+  hosts: all                              # Target all hosts defined in inventory file
+  become: yes                             # Gain sudo privileges for tasks
+
+  tasks:                                  # List of tasks to perform
+    - name: Install CloudWatch Agent package     # Name of this specific task
+      dnf:                                        # Use dnf module to manage packages on RHEL-based systems
+        name: amazon-cloudwatch-agent             # Name of the package to install
+        state: present                            # Ensure the package is installed 
+
+    - name: Start CloudWatch Agent with auto-config  # Name of this specific task
+      command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s # Command to start the CloudWatch Agent with EC2 auto-configuration

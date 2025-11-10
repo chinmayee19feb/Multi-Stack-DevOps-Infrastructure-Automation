@@ -18,11 +18,11 @@ WORKDIR /app
 COPY --from=build /app/publish ./
 
 # Set environment variables (can be overridden at runtime)
-ENV DB_HOST=db
-ENV DB_USERNAME=postgres
+ENV DB_HOST=db              # Point to Postgres service Database service name (resolved by Docker DNS)
+ENV DB_USERNAME=postgres    
 ENV DB_PASSWORD=postgres
-ENV DB_NAME=postgres
-ENV REDIS_HOST=redis
+ENV DB_NAME=postgres        
+ENV REDIS_HOST=redis     # Point to Redis service Redis service name (resolved by Docker DNS)
 
 # Define the entry point
 ENTRYPOINT ["dotnet", "Worker.dll"]
