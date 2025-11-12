@@ -17,7 +17,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 ##########################################
-# EC2 A: Frontend + Bastion (Public Subnet)
+# EC2 A: Frontend eu-west-1a (Public Subnet)
 ##########################################
 resource "aws_instance" "frontend" {             # Creates an EC2 instance resource named "frontend"
   ami                         = data.aws_ami.amazon_linux.id
@@ -281,3 +281,62 @@ output "db_private_ip" {
   description = "Private IP of EC2 C (PostgreSQL)"
   value       = aws_instance.db.private_ip
 }
+
+##########################################
+# Additional Frontend Instance in eu-west-1b (Multi-AZ)
+##########################################
+resource "aws_instance" "frontend_b" {
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.small"
+  subnet_id                   = aws_subnet.private_app_b.id  # Use private subnet in eu-west-1b
+  key_name                    = var.key_pair_name
+  vpc_security_group_ids      = [aws_security_group.frontend.id]
+  associate_public_ip_address = false  # Private instance - accessed via ALB only
+  iam_instance_profile        = aws_iam_instance_profile.cloudwatch_agent.name # Attach IAM instance profile for CloudWatch Agent 
+
+  tags = merge(local.tags, { Name = "EC2-Frontend-1b-Chinmayee" })
+}
+
+# Register new instance with ALB Target Groups
+resource "aws_lb_target_group_attachment" "vote_b" {
+  target_group_arn = aws_lb_target_group.vote.arn
+  target_id        = aws_instance.frontend_b.id
+  port             = 8080
+}
+
+resource "aws_lb_target_group_attachment" "result_b" {
+  target_group_arn = aws_lb_target_group.result.arn
+  target_id        = aws_instance.frontend_b.id
+  port             = 8081
+}
+
+##########################################
+# Additional Backend Instance in eu-west-1b (Multi-AZ)
+##########################################
+resource "aws_instance" "backend_b" {
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.small"
+  subnet_id                   = aws_subnet.private_app_b.id  # Use private app subnet in eu-west-1b
+  key_name                    = var.key_pair_name
+  vpc_security_group_ids      = [aws_security_group.backend.id]
+  associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.cloudwatch_agent.name
+
+  tags = merge(local.tags, { Name = "EC2-Backend-1b-Chinmayee" })
+}
+
+##########################################
+# Additional Database Instance in eu-west-1b (Multi-AZ)
+##########################################
+resource "aws_instance" "db_b" {
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.small"
+  subnet_id                   = aws_subnet.private_db_b.id  # Use private db subnet in eu-west-1b
+  key_name                    = var.key_pair_name
+  vpc_security_group_ids      = [aws_security_group.db.id]
+  associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.cloudwatch_agent.name
+
+  tags = merge(local.tags, { Name = "EC2-DB-1b-Chinmayee" })
+}
+

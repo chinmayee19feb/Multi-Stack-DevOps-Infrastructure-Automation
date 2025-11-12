@@ -1,90 +1,81 @@
-# - Frontend: vote (Flask) & result (Node.js)
-# - Backend: redis & worker (.NET)
-# - Database: postgres (PostgreSQL)
+# ============================================================
+# Multi-AZ Deployment Playbook
+# - Frontend: vote (Flask) & result (Node.js) in both AZs
+# - Backend: redis & worker (.NET) in both AZs  
+# - Database: postgres (PostgreSQL) in both AZs
 # ============================================================
 
 # ------------------------------------------------------------
-# PLAY 1: Setup all servers ( prerequisites)
+# PLAY 1: Setup all servers (common prerequisites)
 # ------------------------------------------------------------
 - name: Setup all servers (common prerequisites)
-  hosts: all          # Run this on all servers (frontend, backend, db)
-  become: yes         # Use sudo (required for installing system packages)
+  hosts: all
+  become: yes
 
   tasks:
-    # Install python3-pip — required for installing Python packages
-    - name: Ensure python3-pip is installed (Amazon Linux 2023 uses dnf)
-      dnf:              # 'dnf' is the package manager in Amazon Linux 2023
+    - name: Ensure python3-pip is installed
+      dnf:
         name: python3-pip
-        state: present  # Ensures pip is installed (does not reinstall if already there)
-
-    # Install Docker SDK for Python — allows Ansible to control Docker
-    - name: Install Docker Python SDK for Ansible (in user space)
-      pip:
-        name: docker      # The PyPI package for Docker SDK
         state: present
-        extra_args: --user  # Install to user's home to avoid permission issues
 
-    # Ensure Docker daemon is running and enabled at boot
+    - name: Install Docker
+      dnf:
+        name: docker
+        state: present
+
     - name: Ensure docker service is started
       systemd:
         name: docker
-        state: started    # Start the Docker service if not running
-        enabled: yes      # Enable Docker to start automatically on reboot
+        state: started
+        enabled: yes
 
 # ------------------------------------------------------------
 # PLAY 2: FRONTEND - Public-facing services (vote & result)
 # ------------------------------------------------------------
 - name: Setup frontend
-  hosts: frontend      # Only runs on servers listed under [frontend] in inventory
+  hosts: frontend
   become: yes
+  vars:
+    # Dynamic configuration based on AZ
+    backend_ip: "{{ '10.20.2.210' if '10.20.1' in ansible_host else '10.20.5.134' }}"
+    db_ip: "{{ '10.20.3.182' if '10.20.1' in ansible_host else '10.20.6.150' }}"
 
   tasks:
-    # Pull the latest vote image from Docker Hub (your published image)
-    - name: Pull vote image (ensure latest)
+    - name: Pull vote image
       community.docker.docker_image:
-        name: chinmayee606/vote   # Docker Hub image name
-        tag: latest               # Image tag
-        source: pull              # Always pull a fresh copy
+        name: chinmayee606/vote
+        tag: latest
+        source: pull
 
-    # Run the vote app container
-    - name: Run vote app (frontend)
-      docker_container:
-        name: vote                        # Container name
-        image: chinmayee606/vote:latest   # Use your custom image
+    - name: Run vote app
+      community.docker.docker_container:
+        name: vote-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
+        image: chinmayee606/vote:latest
         published_ports:
-          - "8080:80"                     # Map port 8080 (host) → 80 (container)
+          - "8080:80"
         env:
-          REDIS_HOST: "10.20.2.210"       # Tell the app where Redis lives (backend IP)
-        restart_policy: always             # Restart automatically if container crashes
-        state: started                     # Make sure the container is running
+          REDIS_HOST: "{{ backend_ip }}"
+        restart_policy: always
+        state: started
 
-    # Pull the latest result app image
-    - name: Pull result image (ensure latest)
-      docker_image:
+    - name: Pull result image
+      community.docker.docker_image:
         name: chinmayee606/result
         tag: latest
         source: pull
 
-    # Run the result app container
-    - name: Run result app (frontend)
-      docker_container:
-        name: result                      # Container name
-        image: chinmayee606/result:latest # Your published image
-        pull: yes
+    - name: Run result app
+      community.docker.docker_container:
+        name: result-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
+        image: chinmayee606/result:latest
         published_ports:
-          - "8081:80"                     # Map port 8081 (host) → 80 (container)
+          - "8081:80"
         env:
-          PG_HOST: "10.20.3.182"           # Use PG_ variables instead of DB_
+          PG_HOST: "{{ db_ip }}"
           PG_USER: "postgres"
           PG_PASSWORD: "postgres"
           PG_DATABASE: "postgres"
-        volumes:
-          - "db-data:/var/lib/postgresql/data"    # Mount volume for DB data persistence
-          - "./healthchecks:/healthchecks"
-        healthcheck:
-          test: /healthchecks/postgres.sh
-          interval: "5s"        
-        restart_policy: always            # Auto-restart container if needed
+        restart_policy: always
         state: started
 
 # ------------------------------------------------------------
@@ -93,92 +84,83 @@
 - name: Setup backend
   hosts: backend
   become: yes
+  vars:
+    db_ip: "{{ '10.20.3.182' if '10.20.2' in ansible_host else '10.20.6.150' }}"
 
   tasks:
-    # ADD THIS: Create shared Docker network for backend services
     - name: Create backend Docker network
-      docker_network:
-        name: backend_net
+      community.docker.docker_network:
+        name: backend-net-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         driver: bridge
 
-    # Pull Redis image (lightweight alpine version)
     - name: Pull redis image
-      docker_image:
+      community.docker.docker_image:
         name: redis
         tag: alpine
         source: pull
 
-    # Run Redis container - ADD networks section
     - name: Run redis
-      docker_container:
-        name: redis
+      community.docker.docker_container:
+        name: redis-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         image: redis:alpine
         command: redis-server --bind 0.0.0.0
         published_ports:
           - "6379:6379"
-        pull: yes
         networks:
-          - name: backend_net    # ← ADDED: Join the shared network
+          - name: backend-net-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         restart_policy: always
-        state: started                   # Ensure Redis is running
+        state: started
 
-    # Pull the latest worker image (your custom image)
-    - name: Pull worker image (ensure latest)
-      docker_image:
+    - name: Pull worker image
+      community.docker.docker_image:
         name: chinmayee606/worker
         tag: latest
         source: pull
 
-    # Run Worker container (.NET service) - ADD networks section
     - name: Run worker service
-      docker_container:
-        name: worker
+      community.docker.docker_container:
+        name: worker-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         image: chinmayee606/worker:latest
-        pull: yes
         networks:
-          - name: backend_net    # ← ADDED: Join the shared network
+          - name: backend-net-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         env:
-          REDIS_HOST: "redis"         # Redis service hostname (Docker DNS) 
-          DB_HOST: "10.20.3.182"           # DB host (Postgres private IP)
-          DB_USERNAME: "postgres"         # DB user
-          DB_PASSWORD: "postgres"         # DB password
-          DB_NAME: "postgres"             # Database name
+          REDIS_HOST: "redis-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}"
+          DB_HOST: "{{ db_ip }}"
+          DB_USERNAME: "postgres"
+          DB_PASSWORD: "postgres"
+          DB_NAME: "postgres"
         restart_policy: always
-        state: started                    # Ensure container is running
+        state: started
 
 # ------------------------------------------------------------
-#  PLAY 4: DATABASE - PostgreSQL (Persistent + accessible)
+# PLAY 4: DATABASE - PostgreSQL
 # ------------------------------------------------------------
 - name: Setup database
   hosts: db
   become: yes
 
   tasks:
-    # Create a Docker volume to persist Postgres data
     - name: Ensure docker volume for Postgres exists
-      docker_volume:
-        name: pgdata        # Named volume (data stored outside container)
+      community.docker.docker_volume:
+        name: pgdata-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         state: present
 
-    # Pull the Postgres image
     - name: Pull postgres image
-      docker_image:
+      community.docker.docker_image:
         name: postgres
-        tag: "15-alpine"    # Lightweight version of Postgres
+        tag: "15-alpine"
         source: pull
 
-    # Run the Postgres container
     - name: Run postgres
-      docker_container:
-        name: postgres
+      community.docker.docker_container:
+        name: postgres-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}
         image: postgres:15-alpine
-        pull: yes
         env:
-          POSTGRES_USER: "postgres"       # Default user for DB
-          POSTGRES_PASSWORD: "postgres"   # Default password
+          POSTGRES_USER: "postgres"
+          POSTGRES_PASSWORD: "postgres"
         volumes:
-          - pgdata:/var/lib/postgresql/data   # Mount the named volume to persist DB
+          - pgdata-{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '') }}:/var/lib/postgresql/data
         published_ports:
-          - "5432:5432"                     #  Expose Postgres port to host network
-        restart_policy: always              # Auto-restart container on reboot/failure
-        state: started                      # Ensure container is up and running
+          - "5432:5432"
+        restart_policy: always
+        state: started

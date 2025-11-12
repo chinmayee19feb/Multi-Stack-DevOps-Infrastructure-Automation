@@ -62,3 +62,56 @@ output "bastion_public_dns" {
   description = "Public DNS of the bastion host"
   value       = aws_eip.bastion.public_dns
 }
+
+# Multi-AZ Subnet IDs
+output "public_b_subnet_id" {
+  description = "Public subnet in eu-west-1b for ALB"
+  value       = aws_subnet.public_b.id
+}
+
+output "private_app_b_subnet_id" {
+  description = "Private app subnet in eu-west-1b"
+  value       = aws_subnet.private_app_b.id
+}
+
+output "private_db_b_subnet_id" {
+  description = "Private database subnet in eu-west-1b"
+  value       = aws_subnet.private_db_b.id
+}
+
+## ALB Output ALB DNS Name
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+# New Instance Private IPs
+output "frontend_b_private_ip" {
+  description = "Private IP of Frontend instance in eu-west-1b"
+  value       = aws_instance.frontend_b.private_ip
+}
+
+output "backend_b_private_ip" {
+  description = "Private IP of Backend instance in eu-west-1b"
+  value       = aws_instance.backend_b.private_ip
+}
+
+output "db_b_private_ip" {
+  description = "Private IP of Database instance in eu-west-1b"
+  value       = aws_instance.db_b.private_ip
+}
+
+# New Instance Private DNS
+output "frontend_b_private_dns" {
+  description = "Private DNS of Frontend instance in eu-west-1b"
+  value       = aws_instance.frontend_b.private_dns
+}
+
+output "backend_b_private_dns" {
+  description = "Private DNS of Backend instance in eu-west-1b"
+  value       = aws_instance.backend_b.private_dns
+}
+
+output "db_b_private_dns" {
+  description = "Private DNS of Database instance in eu-west-1b"
+  value       = aws_instance.db_b.private_dns
+}

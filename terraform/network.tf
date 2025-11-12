@@ -104,3 +104,54 @@ resource "aws_route_table_association" "private_db_assoc" {   # Associates the p
   subnet_id      = aws_subnet.private_db.id                 # References the private database subnet        
   route_table_id = aws_route_table.private.id              # References the private route table created earlier
 }
+
+##########################################
+# Additional Subnets for Multi-AZ Deployment
+##########################################
+
+# Additional Public Subnet for ALB in eu-west-1b
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.20.4.0/24"  # New CIDR for eu-west-1b
+  availability_zone       = "eu-west-1b"
+  map_public_ip_on_launch = true
+
+  tags = merge(local.tags, { Name = "Subnet-Public-1b-Chinmayee" })
+}
+
+# Additional Private App Subnet for eu-west-1b
+resource "aws_subnet" "private_app_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.20.5.0/24"  # New CIDR for eu-west-1b
+  availability_zone = "eu-west-1b"
+
+  tags = merge(local.tags, { Name = "Subnet-Private-App-1b-Chinmayee" })
+}
+
+# Additional Private DB Subnet for eu-west-1b
+resource "aws_subnet" "private_db_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.20.6.0/24"  # New CIDR for eu-west-1b
+  availability_zone = "eu-west-1b"
+
+  tags = merge(local.tags, { Name = "Subnet-Private-DB-1b-Chinmayee" })
+}
+
+##########################################
+# Additional Route Table Associations for new subnets
+##########################################
+
+resource "aws_route_table_association" "public_b_assoc" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private_app_b_assoc" {
+  subnet_id      = aws_subnet.private_app_b.id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "private_db_b_assoc" {
+  subnet_id      = aws_subnet.private_db_b.id
+  route_table_id = aws_route_table.private.id
+}
