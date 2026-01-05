@@ -1,16 +1,31 @@
-<!-- © 2024 | Ironhack -->
+# Multi-Stack Voting Application — Multi-AZ DevOps Deployment on AWS
+---
+## Overview
+
+This project demonstrates how to deploy a production-grade, multi-AZ microservices application on AWS using Terraform, Docker, and Ansible.
+
+##  Architecture Diagram
+<img width="2751" height="1395" alt="Multi-Stack DevOps Infrastructure Automation drawio" src="https://github.com/user-attachments/assets/60ad1819-f4f3-4634-b866-36d1309c8a2c" />
 
 ---
 
-# Multi-Stack Voting Application
+## Architecture Highlights : Multi-Stack Voting Application
 
-**Welcome to your DevOps practice project!** This repository hosts a multi-stack voting application composed of several services, each implemented in a different language and technology stack. The goal is to help you gain experience with containerization, orchestration, and running a distributed set of services—both individually and as part of a unified system.
+- Multi-AZ deployment (eu-west-1a & eu-west-1b)
 
-This application, while simple, uses multiple components commonly found in modern distributed architectures, giving you hands-on practice in connecting services, handling containers, and working with basic infrastructure automation.
+- Public & private subnet isolation
+
+- Application Load Balancer with path-based routing
+
+- Bastion Host for secure SSH access
+
+- NAT Gateways (1 per AZ) for outbound access
+
+- No direct internet access to backend or database
 
 ## Application Overview
-
-The voting application includes:
+The goal was to transform a polyglot microservices application into a secure, highly available, and fully automated cloud deployment, following real-world DevOps best practices.
+### The voting application includes:
 
 - **Vote (Python)**: A Python Flask-based web application where users can vote between two options.
 - **Redis (in-memory queue)**: Collects incoming votes and temporarily stores them.
@@ -18,138 +33,207 @@ The voting application includes:
 - **Postgres (Database)**: Stores votes for long-term persistence.
 - **Result (Node.js)**: A Node.js/Express web application that displays the vote counts in real time.
 
-### Why This Setup?
+## Tools & Technologies
 
-The goal is to introduce you to a variety of languages, tools, and frameworks in one place. This is **not** a perfect production design. Instead, it’s intentionally diverse to help you:
+- **AWS**: VPC, EC2, ALB, IGW, NAT
 
-- Work with multiple runtimes and languages (Python, Node.js, .NET).
-- Interact with services like Redis and Postgres.
-- Containerize applications using Docker.
-- Use Docker Compose to orchestrate and manage multiple services together.
+- **Terraform**: Infrastructure as Code
 
-By dealing with this “messy” environment, you’ll build real-world problem-solving skills. After this project, you should feel more confident tackling more complex deployments and troubleshooting issues in containerized, multi-service setups.
+- **Docker**: Containerization
+
+- **Ansible**: Configuration management
+
+## How the System Works
+- User → ALB → Frontend (Vote / Result)
+- Frontend → Redis
+- Worker → Redis
+- Worker → PostgreSQL
+- Result → PostgreSQL
+-- Backend services never initiate internet traffic and remain fully private.
+---
+## Security Design
+
+- Public subnets: ALB, Bastion, Frontend
+#### All Deployed EC2 Instances 
+<img width="1905" height="542" alt="EC2-multi-az" src="https://github.com/user-attachments/assets/08ea49fe-f6a3-4bc6-a39c-f0edba54f08a" />
+
+- Private app subnets: Redis + Worker
+
+- Private DB subnets: PostgreSQL
+
+- Bastion is the only SSH entry point
+
+- Security Groups enforce least privilege
+#### Security Groups
+<img width="1913" height="472" alt="SG" src="https://github.com/user-attachments/assets/8ba2b297-e18e-4230-8f6f-dc06320a58f8" />
+
+
+## Networking
+
+- Custom VPC (10.20.0.0/16)
+#### VPC Dashboard 
+<img width="1897" height="882" alt="VPC-pointing-Private" src="https://github.com/user-attachments/assets/f722febd-b9e0-42ab-a9e2-ba322337fab8" />
+
+- Public subnets (ALB, Bastion, NAT)
+
+- Private subnets (Backend & Database)
+#### Subnets
+<img width="1912" height="441" alt="Screenshot 2025-11-11 223515" src="https://github.com/user-attachments/assets/89b4a42b-e624-484a-9a2a-7bf5d4f76824" />
+
+
+- Internet Gateway for inbound traffic
+#### Internet Gateway (IGW)
+<img width="1907" height="552" alt="IGW" src="https://github.com/user-attachments/assets/3fab559e-4cbd-43e4-82fa-5e9af5afa0b5" />
+
+
+- NAT Gateway per AZ for outbound access from private subnets
+
+## Availability
+
+Resources distributed across two Availability Zones
+
+No single point of failure for frontend traffic or outbound connectivity
+
+---
+# Infrastructure Provisioning (Terraform)
+- Terraform provisions:
+- VPC (10.20.0.0/16)
+- 6 subnets across 2 AZs
+- Internet Gateway
+- NAT Gateways (1 per AZ)
+- EC2 instances (Frontend, Backend, DB, Bastion) across 2 AZs
+- Security Groups
+- Application Load Balancer
+- Elastic IPs
+
+## The following screenshots confirm successful infrastructure provisioning using Terraform.
+#### Terraform Apply Output 
+<img width="682" height="520" alt="Screenshot 2025-11-11 224225" src="https://github.com/user-attachments/assets/ff565bdc-8d6d-4b51-aa8d-59aa62f75957" />
+
+#### Terraform State List
+<img width="629" height="935" alt="Screenshot 2025-11-11 224054" src="https://github.com/user-attachments/assets/81328d00-89bd-43d9-b2b5-0746b6c642e3" />
+
+
+## Application Load Balancer Configuration
+<img width="1902" height="856" alt="ALB" src="https://github.com/user-attachments/assets/1b1327e8-1dd8-42e3-abae-dedfe19e10aa" />
+
+### Custom Domains
+
+vote.app.chin.diogohack.shop
+
+result.app.chin.diogohack.shop
+
+### Target Groups
+
+- **Vote** → Port 8080
+
+- **Result** → Port 8081
+
+<img width="1910" height="450" alt="TG" src="https://github.com/user-attachments/assets/c21154ff-a330-4fc1-a9be-ccfbfa0dcac2" />
+
+
+### Routing Rules
+
+- **/vote** → Vote service
+
+- **/result** → Result service
+
+---
+## Configuration Management (Ansible)
+
+### Ansible performs:
+
+- Docker installation
+
+- Image pulls from Docker Hub
+
+- Container deployment
+
+- Environment variable configuration
+### Ansible Deployment 
+<img width="1911" height="633" alt="Screenshot 2025-11-11 221007" src="https://github.com/user-attachments/assets/6d45fdaf-9710-454d-801c-c99fdbb04f5a" />
+
+## Connectivity flow:
+Developer → Bastion → Private EC2s
+
+---
+## Container Deployment Verification
+### Frontend (Public)
+<img width="1275" height="677" alt="Screenshot 2025-11-11 222413" src="https://github.com/user-attachments/assets/3dda6337-c731-4e62-8840-1affdc688c79" />
+
+### Backend (Private)
+<img width="1216" height="715" alt="Screenshot 2025-11-11 222259" src="https://github.com/user-attachments/assets/47b3f37a-fc8d-41f5-acc3-89ab319bcb16" />
+
+### Database (Private)
+<img width="1137" height="642" alt="Screenshot 2025-11-11 222105" src="https://github.com/user-attachments/assets/aad8cf19-0904-4d7b-a208-24cd5ed81c22" />
+- All containers verified running across both AZs.
+---
+
+## Application Validation
+### Voting UI
+<img width="1736" height="932" alt="with-domain-voting" src="https://github.com/user-attachments/assets/1101c473-d9e2-4292-9ea3-8ccb6d245576" />
+
+
+### Real-Time Results Dashboard
+<img width="1718" height="1004" alt="result-domain" src="https://github.com/user-attachments/assets/fda5ef82-68b9-4afe-b7c9-8ede7c3714ec" />
+
+
+### Votes flow correctly:
+- Redis → Worker → PostgreSQL → Result UI
 
 ---
 
-## How to Run Each Component
-
-### Running the Vote Service (Python) Locally (No Docker)
-
-1. Ensure you have Python 3.10+ installed.
-2. Navigate to the `vote` directory:
-   ```bash
-   cd vote
-   pip install -r requirements.txt
-   python app.py
-   ```
-   Access the vote interface at [http://localhost:5000](http://localhost:5000).
-
-### Running Redis Locally (No Docker)
-
-1. Install Redis on your system ([https://redis.io/docs/getting-started/](https://redis.io/docs/getting-started/)).
-2. Start Redis:
-   ```bash
-   redis-server
-   ```
-   Redis will be available at `localhost:6379`.
-
-### Running the Worker (C#/.NET) Locally (No Docker)
-
-1. Ensure .NET 7.0 SDK is installed.
-2. Navigate to `worker`:
-   ```bash
-   cd worker
-   dotnet restore
-   dotnet run
-   ```
-   The worker will attempt to connect to Redis and Postgres when available.
-
-### Running Postgres Locally (No Docker)
-
-1. Install Postgres from [https://www.postgresql.org/download/](https://www.postgresql.org/download/).
-2. Start Postgres, note the username and password (default `postgres`/`postgres`):
-   ```bash
-   # On many systems, Postgres runs as a service once installed.
-   ```
-   Postgres will be available at `localhost:5432`.
-
-### Running the Result Service (Node.js) Locally (No Docker)
-
-1. Ensure Node.js 18+ is installed.
-2. Navigate to `result`:
-   ```bash
-   cd result
-   npm install
-   node server.js
-   ```
-   Access the results interface at [http://localhost:4000](http://localhost:4000).
-
-**Note:** To get the entire system working end-to-end (i.e., votes flowing through Redis, processed by the worker, stored in Postgres, and displayed by the result app), you’ll need to ensure each component is running and that connection strings or environment variables point to the correct services.
+## Challenges & Solutions
+| Challenge                    | Solution                                           |
+| ---------------------------- | -------------------------------------------------- |
+| AMI drift                    | Used Terraform data source for latest Amazon Linux |
+| Containers not communicating | Fixed Docker network configuration                 |
+| Bastion access issues        | Implemented SSH ProxyJump                          |
+| Secure outbound access       | NAT Gateway per AZ                                 |
 
 ---
+## Key Learnings
 
-## Running the Entire Stack in Docker
+- Terraform enables rapid environment rebuilds
 
-### Building and Running Individual Services
+- Networking mistakes are the #1 DevOps failure point
 
-You can build each service with Docker and run them individually:
+- Bastion hosts are critical for secure operations
 
-- **Vote (Python)**:
-  ```bash
-  docker build -t myorg/vote:latest ./vote
-  docker run --name vote -p 8080:80 myorg/vote:latest
-  ```
-  Visit [http://localhost:8080](http://localhost:8080).
+- Multi-AZ design requires thoughtful routing
 
-- **Redis** (official image, no build needed):
-  ```bash
-  docker run --name redis -p 6379:6379 redis:alpine
-  ```
-
-- **Worker (.NET)**:
-  ```bash
-  docker build -t myorg/worker:latest ./worker
-  docker run --name worker myorg/worker:latest
-  ```
-  
-- **Postgres**:
-  ```bash
-  docker run --name db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:15-alpine
-  ```
-
-- **Result (Node.js)**:
-  ```bash
-  docker build -t myorg/result:latest ./result
-  docker run --name result -p 8081:80 myorg/result:latest
-  ```
-  Visit [http://localhost:8081](http://localhost:8081).
-
-### Using Docker Compose
-
-The easiest way to run the entire stack is via Docker Compose. From the project root directory:
-
-```bash
-docker compose up
-```
-
-This will:
-
-- Build and run the vote, worker, and result services.
-- Run Redis and Postgres from their official images.
-- Set up networks, volumes, and environment variables so all services can communicate.
-
-Visit [http://localhost:8080](http://localhost:8080) to vote and [http://localhost:8081](http://localhost:8081) to see results.
-
+- Ansible simplifies multi-host orchestration
 ---
+## 🎯 Conclusion
 
-## Notes on Platforms (arm64 vs amd64)
+This project demonstrates **real-world DevOps engineering** through a complete infrastructure lifecycle:
 
-If you’re on an arm64 machine (e.g., Apple Silicon M1/M2) and encounter issues with images or dependencies that assume amd64, you can use Docker `buildx`:
+### ✅ **What Was Accomplished:**
+- **Cloud Architecture**: Designed & deployed multi-AZ, production-grade AWS infrastructure
+- **Security Design**: Implemented VPC isolation, bastion hosts, and least-privilege security groups
+- **Infrastructure Automation**: Full IaC with Terraform for repeatable deployments
+- **Distributed System Debugging**: Resolved microservices communication across private subnets
+- **Production-Ready Patterns**: ALB routing, NAT gateways, multi-AZ redundancy
 
-```bash
-docker buildx build --platform linux/amd64 -t myorg/worker:latest ./worker
-```
+### 📈 **Business Value Delivered:**
+- **High Availability**: No single point of failure across two availability zones
+- **Security Compliance**: Private backends, controlled access via bastion
+- **Operational Excellence**: Complete automation from infrastructure to application deployment
+- **Cost Optimization**: Efficient resource utilization with auto-scaling readiness
 
-This ensures the image is built for the desired platform.
-
+*This implementation serves as a blueprint for deploying secure, scalable microservices on AWS.*
 ---
+## Author
+
+### Chinmayee Pradhan
+DevOps Engineer | AWS | Cloud Infrastructure
+📍 Netherlands
+-
+**GitHub:** [chinmayee19feb](https://github.com/chinmayee19feb)  
+### 🛠️ **Technologies Demonstrated:**
+- **AWS Architecture**: VPC, Multi-AZ, ALB, NAT Gateway
+- **Infrastructure as Code**: Terraform
+- **Configuration Management**: Ansible
+- **Containerization**: Docker
+- **Microservices**: Python Flask, .NET, Node.js, Redis, PostgreSQL
+
