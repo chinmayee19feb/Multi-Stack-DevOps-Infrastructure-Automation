@@ -5,7 +5,7 @@
 This project demonstrates how to deploy a production-grade, multi-AZ microservices application on AWS using Terraform, Docker, and Ansible.
 
 ##  Architecture Diagram
-<img width="2788" height="1565" alt="Multi-Stack DevOps Infrastructure Automation drawio" src="https://github.com/user-attachments/assets/52244ed2-3bf8-46f7-8e36-86bb54291cdd" />
+<img width="2787" height="1563" alt="Multi-Stack DevOps Infrastructure Automation drawio" src="https://github.com/user-attachments/assets/fdef8e78-0ac5-4028-96b4-ad407b132c74" />
 
 
 ---
