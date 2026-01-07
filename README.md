@@ -5,7 +5,8 @@
 This project demonstrates how to deploy a production-grade, multi-AZ microservices application on AWS using Terraform, Docker, and Ansible.
 
 ##  Architecture Diagram
-<img width="2751" height="1395" alt="Multi-Stack DevOps Infrastructure Automation drawio" src="https://github.com/user-attachments/assets/60ad1819-f4f3-4634-b866-36d1309c8a2c" />
+<img width="2788" height="1565" alt="Multi-Stack DevOps Infrastructure Automation drawio" src="https://github.com/user-attachments/assets/52244ed2-3bf8-46f7-8e36-86bb54291cdd" />
+
 
 ---
 
@@ -21,6 +22,8 @@ This project demonstrates how to deploy a production-grade, multi-AZ microservic
 
 - NAT Gateways (1 per AZ) for outbound access
 
+- Terraform remote state management using S3 with DynamoDB locking
+
 - No direct internet access to backend or database
 
 ## Application Overview
@@ -35,13 +38,14 @@ The goal was to transform a polyglot microservices application into a secure, hi
 
 ## Tools & Technologies
 
-- **AWS**: VPC, EC2, ALB, IGW, NAT
+- **AWS**: VPC, EC2, ALB, IGW, NAT, S3, DynamoDB
 
 - **Terraform**: Infrastructure as Code
 
 - **Docker**: Containerization
 
 - **Ansible**: Configuration management
+ 
 
 ## How the System Works
 - User → ALB → Frontend (Vote / Result)
@@ -95,7 +99,9 @@ Resources distributed across two Availability Zones
 No single point of failure for frontend traffic or outbound connectivity
 
 ---
+
 # Infrastructure Provisioning (Terraform)
+### Terraform provisions the following infrastructure components:
 - Terraform provisions:
 - VPC (10.20.0.0/16)
 - 6 subnets across 2 AZs
@@ -105,6 +111,16 @@ No single point of failure for frontend traffic or outbound connectivity
 - Security Groups
 - Application Load Balancer
 - Elastic IPs
+
+### Terraform Backend Configuration
+
+Terraform uses a remote backend to manage infrastructure state:
+
+- **Amazon S3** for remote Terraform state storage
+- **Amazon DynamoDB** for state locking and concurrency control
+
+This prevents concurrent state modifications and ensures safe, consistent, and repeatable infrastructure deployments.
+
 
 ## The following screenshots confirm successful infrastructure provisioning using Terraform.
 #### Terraform Apply Output 
@@ -214,6 +230,8 @@ This project demonstrates **real-world DevOps engineering** through a complete i
 - **Infrastructure Automation**: Full IaC with Terraform for repeatable deployments
 - **Distributed System Debugging**: Resolved microservices communication across private subnets
 - **Production-Ready Patterns**: ALB routing, NAT gateways, multi-AZ redundancy
+- **Infrastructure Governance**: Remote Terraform state with S3 and DynamoDB locking for safe, collaborative IaC workflows
+
 
 ### 📈 **Business Value Delivered:**
 - **High Availability**: No single point of failure across two availability zones
